@@ -4,6 +4,10 @@ A small Node.js [MCP](https://modelcontextprotocol.io) server that gives an AI c
 
 No npm dependencies: Node.js built-ins only (`fetch`, `FormData`, `node:test`).
 
+![Sample output: Qwen-Image 2.1 on a local ComfyUI, 1024x1024, 35 s end to end](docs/sample.jpg)
+
+*Sample output of the local route, requested over MCP stdio with the prompt "a small red fox sitting in a snowy forest, soft morning light" (Qwen-Image 2.1 on ComfyUI, 1024x1024, 35 s).*
+
 ## Architecture
 
 ```mermaid
@@ -37,7 +41,7 @@ All settings are environment variables; see [.env.example](.env.example). The ma
 | Variable | Default | Meaning |
 |---|---|---|
 | `OPENAI_API_KEY` | (none) | Enables the cloud backend. Without it, `auto` goes straight to ComfyUI. |
-| `OPENAI_IMAGE_MODEL` | `gpt-image-1` | Model sent to the Images API. |
+| `OPENAI_IMAGE_MODEL` | `gpt-image-1` | Model sent to the Images API. OpenAI's guide now lists newer GPT Image models; set this to a current one. |
 | `COMFYUI_URL` | `http://127.0.0.1:8188` | The ComfyUI server. |
 | `QWEN_UNET`, `QWEN_CLIP`, `QWEN_VAE` | the Qwen-Image 2.1 file names | Model files in your ComfyUI install. |
 | `IMAGE_OUTPUT_DIR` | `~/Pictures/mcp-image-gen` | Where images go when the call names no path. |
@@ -90,7 +94,8 @@ What was verified, and how:
 
 - **This repository:** 23 offline tests pass with `npm test` (fake OpenAI and ComfyUI servers; the stdio server tested as a real child process). Each critical rule was checked by injecting a deliberate bug and confirming a test fails: no fallback on refusal, key redaction, the rate-limit pause, reference padding, consecutive seeds, and the 401 classification.
 - **The private predecessor** of this server (same tool, same fallback rules, a different cloud route) was verified with a stdio test harness, no model involved: real cloud text-to-image and reference-guided generations, a real local Qwen-Image 2.1 generation (21 s), and a fake cloud endpoint answering 429, after which the server switched to Qwen and the next request skipped the cloud. A real Claude Code session then found the tool on its own and returned the `file:///` link; that is also how the `alwaysLoad` flag was found to be necessary. The ComfyUI workflow graph (nodes, parameters, the `EmptyLatentImage` canvas fix, padding references to three) comes from the author's production setup.
-- **Not verified:** the predecessor's cloud route was replaced here by the official OpenAI Images API, and its local route (which called a separate script) was replaced by direct ComfyUI HTTP calls. Neither new code path has been run against a real OpenAI account or a real ComfyUI server yet; they are covered by the mocked tests only. Assumptions about the OpenAI API: `POST /v1/images/generations` (JSON) and `POST /v1/images/edits` (multipart, repeated `image[]` parts), fields `model`, `prompt`, `n`, `size` (`1024x1536`, `1024x1024`, `1536x1024`), optional `quality` (`low`/`medium`/`high`), response `data[].b64_json`, errors as `{ error: { message, code } }`, default model `gpt-image-1`.
+- **Local route, verified on a real server (29.10.2026):** this server, started as a stdio child process with no OpenAI key, answered `initialize`, `tools/list` and a `generate_image` call; `auto` fell back to ComfyUI with the note "OpenAI not configured" and Qwen-Image 2.1 returned a 1024x1024 PNG in 35 s (the sample above).
+- **Cloud route, not run yet:** the predecessor's cloud route was replaced here by the official OpenAI Images API, which has not been called with a real OpenAI account; it is covered by the mocked tests only. The request shape was checked against OpenAI's image-generation guide on 29.10.2026 (repeated `image[]` parts, the three sizes, `data[].b64_json`). Assumptions about the OpenAI API: `POST /v1/images/generations` (JSON) and `POST /v1/images/edits` (multipart, repeated `image[]` parts), fields `model`, `prompt`, `n`, `size` (`1024x1536`, `1024x1024`, `1536x1024`), optional `quality` (`low`/`medium`/`high`), response `data[].b64_json`, errors as `{ error: { message, code } }`, default model `gpt-image-1`.
 - CI is configured but has not run yet (it runs on the first push).
 
 ## License
